@@ -5,8 +5,11 @@ class City {
   final String name;
   final double lat;
   final double lon;
+  final String? state;
 
-  const City(this.name, this.lat, this.lon);
+  const City(this.name, this.lat, this.lon, [this.state]);
+
+  String get label => state == null ? name : '$name, $state';
 }
 
 /// An error with a message that is ready to show to users.
@@ -23,6 +26,10 @@ abstract class WeatherRepository {
   Future<City> findCity(String name);
 
   Future<Weather> getWeather(City city);
+
+  Future<List<City>> searchCities(String query);
+
+  Future<City> cityAt(double lat, double lon);
 }
 
 /// A fake for testing or working offline. No screen changes needed to use it.
@@ -50,5 +57,15 @@ class FakeWeatherRepository implements WeatherRepository {
           ),
       ],
     );
+  }
+
+  @override
+  Future<List<City>> searchCities(String query) async {
+    return const <City>[];
+  }
+
+  @override
+  Future<City> cityAt(double lat, double lon) async { 
+    return City('ahmedabad', 0, 0); //update
   }
 }

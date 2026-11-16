@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 
-import 'data/open_meteo_repository.dart';
+// import 'data/open_meteo_repository.dart';
 import 'screens/weather_screen.dart';
+import 'config/repository_config.dart';
 
 void main() => runApp(const WeatherApp());
 
@@ -23,7 +24,7 @@ class WeatherApp extends StatelessWidget {
       theme: _buildTheme(Brightness.light),
       darkTheme: _buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
-      home: WeatherScreen(repository: OpenMeteoWeatherRepository()),
+      home: WeatherScreen(repository: createWeatherRepository()), //old(http): OpenMeteoWeatherRepository()
     );
   }
 }

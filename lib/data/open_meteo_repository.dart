@@ -66,4 +66,30 @@ class OpenMeteoWeatherRepository implements WeatherRepository {
       throw WeatherException('Unexpected data from the server');
     }
   }
+
+  @override
+  Future<List<City>> searchCities(String query) async {
+    final url = Uri.https('geocoding-api.open-meteo.com', '/v1/search', {
+      'name': query,
+      'count': '5',
+      'language': 'en',
+      'countryCode' : 'IN'
+      
+    });
+
+    final data = await _getJson(url);
+    final results = data['results'] as List?;
+    if (results == null || results.isEmpty) {
+      // throw WeatherException('City of State "$query" not found');
+      return const <City>[];
+    }
+
+    final r = results as List<City>;
+    return r;
+  }
+
+  @override
+  Future<City> cityAt(double lat, double lon) async { 
+    return City('ahmedabad', 0, 0); //update
+  }
 }

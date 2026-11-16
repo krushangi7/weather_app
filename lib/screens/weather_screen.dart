@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:weather_app/screens/map_picker_screen.dart';
 
 import '../data/weather_repository.dart';
 import '../models/weather.dart';
@@ -14,21 +15,30 @@ class WeatherScreen extends StatefulWidget {
 
 class _WeatherScreenState extends State<WeatherScreen> {
   final _searchController = TextEditingController();
+  final _searchFocusNode = FocusNode();
+  String _lastSearchedText = '';
 
   late Future<Weather> _future; // created in initState, never in build()
   String _cityName = 'Ahmedabad'; // shown in the AppBar
-  String _lastQuery = 'Ahmedabad'; // used by Retry
+  String _lastQuery = 'Ahmedabad';
+  City? _lastCity;
 
   @override
   void initState() {
     super.initState();
+    _searchFocusNode.addListener(_onSearchFocusChange);
     _future = _load(_lastQuery);
   }
 
   @override
   void dispose() {
     _searchController.dispose(); 
+    _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  void _onSearchFocusChange() {
+    if (!_searchFocusNode.hasFocus) _search();
   }
 
   /// Name → City → Weather.
@@ -36,17 +46,37 @@ class _WeatherScreenState extends State<WeatherScreen> {
     _lastQuery = query;
     final city = await widget.repository.findCity(query);
     if (mounted) setState(() => _cityName = city.name);
-    return widget.repository.getWeather(city);
+    return _loadCity(city);
   }
 
   void _search() {
     final query = _searchController.text.trim();
-    if (query.isEmpty) return; // guard clause
-    FocusScope.of(context).unfocus(); // hide the keyboard
+    if (query.isEmpty || query == _lastSearchedText) return;
+    _lastSearchedText = query;
     setState(() => _future = _load(query));
   }
 
-  void _retry() => setState(() => _future = _load(_lastQuery));
+  Future<Weather> _loadFromMap(City picked) async {
+  final city = await widget.repository.cityAt(picked.lat, picked.lon);
+  if (mounted) {
+    setState(() {
+      _lastCity = city;
+      _cityName = city.label;            // "Panipat, Haryana"
+    });
+  }
+  return widget.repository.getWeather(city);
+}
+
+  Future<Weather> _loadCity(City city) {
+    // setState(() {
+    //   _lastCity = city;
+    // });
+    _lastCity = city;
+    _cityName = city.label;
+    return widget.repository.getWeather(city);
+  }
+
+  void _retry() => setState(() => _future = _load(_lastCity != null ? _lastCity!.name : _lastQuery));
 
   /// Pull to refresh: RefreshIndicator waits for this Future to finish.
   Future<void> _refresh() async {
@@ -59,30 +89,60 @@ class _WeatherScreenState extends State<WeatherScreen> {
     }
   }
 
+  Future<void> _pickOnMap() async {
+    final city = await Navigator.push<City>(
+      context,
+      MaterialPageRoute(builder: (context) => const MapPickerScreen()),
+    );
+    if (city == null || !mounted) return;
+    setState(() {
+        _future = _loadFromMap(city);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text(_cityName)),
+      appBar: AppBar(title: Text(_cityName), actions: [
+        IconButton(onPressed: _pickOnMap, icon: Icon(Icons.map))
+      ],),
       body: Column(
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-            child: TextField(
-              controller: _searchController,
-              textInputAction: TextInputAction.search,
-              onSubmitted: (_) => _search(),
-              decoration: InputDecoration(
-                hintText: 'Search city',
-                prefixIcon: const Icon(Icons.search),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.arrow_forward),
-                  tooltip: 'Search',
-                  onPressed: _search,
-                ),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
+            child: Autocomplete<City>(
+              textEditingController: _searchController,
+              focusNode: _searchFocusNode,
+              displayStringForOption: (city) => city.label,              // text shown for a City
+              optionsBuilder: (textEditingValue) async {                 // runs as the user types
+                final query = textEditingValue.text.trim();
+                if (query.length < 2) return const <City>[];             // guard clause
+                return widget.repository.searchCities(query);
+              },
+              onSelected: (city) {
+                _lastSearchedText = city.label;            // so the blur doesn't search again by name
+                setState(() {
+                _cityName = city.name;
+                _lastQuery = city.name;
+                _future = _loadCity(city);
+              });
+
+                _searchFocusNode.unfocus();    
+              },
+              fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                return TextField(
+                  controller: controller,                   
+                  focusNode: focusNode,                     
+                  textInputAction: TextInputAction.search,
+                  onSubmitted: (_) => focusNode.unfocus(),       // Enter → lose focus → search runs
+                  onTapOutside: (_) => focusNode.unfocus(),     
+                  decoration: InputDecoration(            
+                    hintText: 'Search city',
+                    prefixIcon: const Icon(Icons.search),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                );
+              },
             ),
           ),
           Expanded(
